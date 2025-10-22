@@ -1,0 +1,13 @@
+# .specify/config.template
+# Template configuration for local template selection
+#
+# Copy this file to .specify/config and customize for your project
+
+# Template arguments (space-separated)
+# Format: "{arg1} {arg2}"
+# Example: "claude sh" will match spec-kit-template-claude-sh-v*.zip
+TEMPLATE_ARGS="claude sh"
+
+# Optional: Pin to specific version (defaults to latest)
+# Example: TEMPLATE_VERSION="0.0.78"
+# TEMPLATE_VERSION=""

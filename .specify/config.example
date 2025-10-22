@@ -1,0 +1,47 @@
+# .specify/config.example
+# Example configuration for local template selection
+#
+# Copy this file to .specify/config and customize for your project:
+#   cp .specify/config.example .specify/config
+
+# =============================================================================
+# TEMPLATE ARGUMENTS (Required)
+# =============================================================================
+# Specify which template to use by providing space-separated arguments.
+# These arguments must match the template filename pattern:
+#   spec-kit-template-{arg1}-{arg2}-v{version}.zip
+#
+# Format: "{arg1} {arg2}"
+#
+# Examples:
+#   TEMPLATE_ARGS="claude sh"    # Matches: spec-kit-template-claude-sh-v*.zip
+#   TEMPLATE_ARGS="claude py"    # Matches: spec-kit-template-claude-py-v*.zip
+#   TEMPLATE_ARGS="test js"      # Matches: spec-kit-template-test-js-v*.zip
+#
+TEMPLATE_ARGS="claude sh"
+
+# =============================================================================
+# TEMPLATE VERSION (Optional)
+# =============================================================================
+# By default, the system automatically selects the latest version when multiple
+# templates with the same arguments exist. You can override this to pin to a
+# specific version.
+#
+# Format: "MAJOR.MINOR.PATCH" or "vMAJOR.MINOR.PATCH"
+#
+# Examples:
+#   TEMPLATE_VERSION="0.0.78"    # Pin to specific version
+#   TEMPLATE_VERSION="v0.0.78"   # Also valid with 'v' prefix
+#
+# Leave commented to always use the latest version (recommended):
+# TEMPLATE_VERSION=""
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - Template files must be placed in the directory where you run the
+#   create-new-feature.sh command
+# - If this config file is missing or TEMPLATE_ARGS is not set, the system
+#   will prompt you interactively to select from available templates
+# - Template filenames must follow the exact pattern:
+#   spec-kit-template-{arg1}-{arg2}-v{version}.zip
