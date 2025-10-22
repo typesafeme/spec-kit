@@ -558,6 +558,54 @@ def merge_json_files(existing_path: Path, new_content: dict, verbose: bool = Fal
 
     return merged
 
+def find_local_template(ai_assistant: str, script_type: str, search_dir: Path, verbose: bool = False) -> Optional[Path]:
+    """Find local template zip file matching pattern spec-kit-template-{agent}-{script}-v{version}.zip
+    
+    Args:
+        ai_assistant: AI assistant name (e.g., 'claude', 'copilot')
+        script_type: Script type ('sh' or 'ps')
+        search_dir: Directory to search for template files
+        verbose: Whether to print search information
+        
+    Returns:
+        Path to the latest matching template file, or None if not found
+    """
+    import re
+    
+    pattern = f"spec-kit-template-{ai_assistant}-{script_type}-v"
+    version_pattern = re.compile(rf"^spec-kit-template-{re.escape(ai_assistant)}-{re.escape(script_type)}-v(\d+\.\d+\.\d+)\.zip$")
+    
+    if verbose:
+        console.print(f"[cyan]Searching for local template:[/cyan] {pattern}*.zip in {search_dir}")
+    
+    matching_files = []
+    for file in search_dir.glob(f"{pattern}*.zip"):
+        match = version_pattern.match(file.name)
+        if match:
+            version_str = match.group(1)
+            # Parse semantic version (major.minor.patch)
+            try:
+                version_parts = tuple(map(int, version_str.split('.')))
+                matching_files.append((file, version_parts, version_str))
+            except ValueError:
+                continue
+    
+    if not matching_files:
+        if verbose:
+            console.print(f"[yellow]No local template found matching pattern:[/yellow] {pattern}*.zip")
+        return None
+    
+    # Sort by version (descending) and get the latest
+    matching_files.sort(key=lambda x: x[1], reverse=True)
+    latest_file, _, version_str = matching_files[0]
+    
+    if verbose:
+        console.print(f"[green]Found local template:[/green] {latest_file.name} (v{version_str})")
+        if len(matching_files) > 1:
+            console.print(f"[dim]Other versions available: {', '.join(f.name for f, _, _ in matching_files[1:])}")
+    
+    return latest_file
+
 def download_template_from_github(ai_assistant: str, download_dir: Path, *, script_type: str = "sh", verbose: bool = True, show_progress: bool = True, client: httpx.Client = None, debug: bool = False, github_token: str = None) -> Tuple[Path, dict]:
     repo_owner = "github"
     repo_name = "spec-kit"
@@ -671,33 +719,70 @@ def download_template_from_github(ai_assistant: str, download_dir: Path, *, scri
 def download_and_extract_template(project_path: Path, ai_assistant: str, script_type: str, is_current_dir: bool = False, *, verbose: bool = True, tracker: StepTracker | None = None, client: httpx.Client = None, debug: bool = False, github_token: str = None) -> Path:
     """Download the latest release and extract it to create a new project.
     Returns project_path. Uses tracker if provided (with keys: fetch, download, extract, cleanup)
+    
+    First attempts to use local template file if available, then falls back to GitHub download.
     """
     current_dir = Path.cwd()
-
-    if tracker:
-        tracker.start("fetch", "contacting GitHub API")
-    try:
-        zip_path, meta = download_template_from_github(
-            ai_assistant,
-            current_dir,
-            script_type=script_type,
-            verbose=verbose and tracker is None,
-            show_progress=(tracker is None),
-            client=client,
-            debug=debug,
-            github_token=github_token
-        )
+    
+    # Try to find local template first
+    local_template = find_local_template(ai_assistant, script_type, current_dir, verbose=verbose and tracker is None)
+    
+    if local_template:
+        # Use local template
+        zip_path = local_template
         if tracker:
-            tracker.complete("fetch", f"release {meta['release']} ({meta['size']:,} bytes)")
+            tracker.add("fetch", "Check for local template")
+            tracker.complete("fetch", f"found {local_template.name}")
             tracker.add("download", "Download template")
-            tracker.complete("download", meta['filename'])
-    except Exception as e:
+            tracker.skip("download", "using local template")
+        elif verbose:
+            console.print(f"[green]Using local template:[/green] {local_template.name}")
+        
+        # Extract metadata from filename (e.g., spec-kit-template-claude-sh-v1.2.3.zip)
+        import re
+        version_match = re.search(r'-v(\d+\.\d+\.\d+)\.zip$', local_template.name)
+        version = version_match.group(1) if version_match else "unknown"
+        
+        meta = {
+            "filename": local_template.name,
+            "size": local_template.stat().st_size,
+            "release": f"v{version}",
+            "asset_url": f"file://{local_template}",
+            "source": "local"
+        }
+    else:
+        # Fall back to GitHub download
         if tracker:
-            tracker.error("fetch", str(e))
-        else:
-            if verbose:
-                console.print(f"[red]Error downloading template:[/red] {e}")
-        raise
+            tracker.add("fetch", "Check for local template")
+            tracker.complete("fetch", "not found, downloading from GitHub")
+        elif verbose:
+            console.print("[cyan]No local template found, downloading from GitHub...[/cyan]")
+        
+        if tracker:
+            tracker.start("fetch", "contacting GitHub API")
+        try:
+            zip_path, meta = download_template_from_github(
+                ai_assistant,
+                current_dir,
+                script_type=script_type,
+                verbose=verbose and tracker is None,
+                show_progress=(tracker is None),
+                client=client,
+                debug=debug,
+                github_token=github_token
+            )
+            meta["source"] = "github"
+            if tracker:
+                tracker.complete("fetch", f"release {meta['release']} ({meta['size']:,} bytes)")
+                tracker.add("download", "Download template")
+                tracker.complete("download", meta['filename'])
+        except Exception as e:
+            if tracker:
+                tracker.error("fetch", str(e))
+            else:
+                if verbose:
+                    console.print(f"[red]Error downloading template:[/red] {e}")
+            raise
 
     if tracker:
         tracker.add("extract", "Extract template")
@@ -808,12 +893,20 @@ def download_and_extract_template(project_path: Path, ai_assistant: str, script_
         if tracker:
             tracker.add("cleanup", "Remove temporary archive")
 
-        if zip_path.exists():
+        # Only delete the zip if it was downloaded from GitHub (not a local template)
+        should_delete = meta.get("source") == "github"
+        
+        if should_delete and zip_path.exists():
             zip_path.unlink()
             if tracker:
                 tracker.complete("cleanup")
             elif verbose:
                 console.print(f"Cleaned up: {zip_path.name}")
+        else:
+            if tracker:
+                tracker.skip("cleanup", "local template preserved")
+            elif verbose:
+                console.print(f"[dim]Preserved local template: {zip_path.name}")
 
     return project_path
 

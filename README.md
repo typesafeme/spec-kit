@@ -177,6 +177,8 @@ The `specify` command supports the following options:
 | `--debug`              | Flag     | Enable detailed debug output for troubleshooting                            |
 | `--github-token`       | Option   | GitHub token for API requests (or set GH_TOKEN/GITHUB_TOKEN env variable)  |
 
+> **Note on Offline Template Support**: `specify init` will automatically use local template zip files if found in the current directory. Templates should follow the naming pattern `spec-kit-template-{agent}-{script}-v{version}.zip` (e.g., `spec-kit-template-claude-sh-v0.0.20.zip`). If multiple versions exist, the latest version is used. If no local template is found, the command falls back to downloading from GitHub.
+
 ### Examples
 
 ```bash
@@ -216,6 +218,11 @@ specify init my-project --ai claude --debug
 
 # Use GitHub token for API requests (helpful for corporate environments)
 specify init my-project --ai claude --github-token ghp_your_token_here
+
+# Use local template for offline development
+# First, place a template zip in your current directory (e.g., spec-kit-template-claude-sh-v0.0.20.zip)
+# Then run init - it will automatically use the local template instead of downloading
+specify init my-project --ai claude --script sh
 
 # Check system requirements
 specify check
