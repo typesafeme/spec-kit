@@ -41,5 +41,9 @@ env/
 
 # Spec Kit-specific files
 .genreleases/
+# Ignore zip files in root and most directories (build artifacts, downloads)
+/*.zip
 *.zip
+# But allow template zips in the installation templates directory
+!src/specify_cli/spec-kit-templates/*.zip
 sdd-*/

@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/github/spec-kit/actions/workflows/release.yml"><img src="https://github.com/github/spec-kit/actions/workflows/release.yml/badge.svg" alt="Release"/></a>
-    <a href="https://github.com/github/spec-kit/stargazers"><img src="https://img.shields.io/github/stars/github/spec-kit?style=social" alt="GitHub stars"/></a>
-    <a href="https://github.com/github/spec-kit/blob/main/LICENSE"><img src="https://img.shields.io/github/license/github/spec-kit" alt="License"/></a>
-    <a href="https://github.github.io/spec-kit/"><img src="https://img.shields.io/badge/docs-GitHub_Pages-blue" alt="Documentation"/></a>
+    <a href="https://github.com/typesafeme/spec-kit/actions/workflows/release.yml"><img src="https://github.com/typesafeme/spec-kit/actions/workflows/release.yml/badge.svg" alt="Release"/></a>
+    <a href="https://github.com/typesafeme/spec-kit/stargazers"><img src="https://img.shields.io/github/stars/typesafeme/spec-kit?style=social" alt="GitHub stars"/></a>
+    <a href="https://github.com/typesafeme/spec-kit/blob/main/LICENSE"><img src="https://img.shields.io/github/license/typesafeme/spec-kit" alt="License"/></a>
+    <a href="https://typesafeme.github.io/spec-kit/"><img src="https://img.shields.io/badge/docs-GitHub_Pages-blue" alt="Documentation"/></a>
 </p>
 
 ---
@@ -46,12 +46,12 @@ Spec-Driven Development **flips the script** on traditional software development
 
 Choose your preferred installation method:
 
-#### Option 1: Persistent Installation (Recommended)
+#### Option 1: Using uv (Recommended)
 
 Install once and use everywhere:
 
 ```bash
-uv tool install specify-cli --from git+https://github.com/github/spec-kit.git
+uv tool install specify-cli --from git+https://github.com/typesafeme/spec-kit.git
 ```
 
 Then use the tool directly:
@@ -64,23 +64,74 @@ specify check
 To upgrade specify run:
 
 ```bash
-uv tool install specify-cli --force --from git+https://github.com/github/spec-kit.git
+uv tool install specify-cli --force --from git+https://github.com/typesafeme/spec-kit.git
 ```
 
-#### Option 2: One-time Usage
+**Benefits of uv:**
 
-Run directly without installing:
-
-```bash
-uvx --from git+https://github.com/github/spec-kit.git specify init <PROJECT_NAME>
-```
-
-**Benefits of persistent installation:**
-
+- Fast and reliable Python package installer
 - Tool stays installed and available in PATH
-- No need to create shell aliases
 - Better tool management with `uv tool list`, `uv tool upgrade`, `uv tool uninstall`
 - Cleaner shell configuration
+
+#### Option 2: Using pip
+
+Install directly from GitHub:
+
+```bash
+pip install git+https://github.com/typesafeme/spec-kit.git
+```
+
+Then use the tool:
+
+```bash
+specify init <PROJECT_NAME>
+specify check
+```
+
+To upgrade:
+
+```bash
+pip install --upgrade git+https://github.com/typesafeme/spec-kit.git
+```
+
+#### Option 3: Clone and Install Locally
+
+For development or offline use:
+
+```bash
+# Clone the repository
+git clone https://github.com/typesafeme/spec-kit.git
+cd spec-kit
+
+# Install in development mode (recommended for contributing)
+pip install -e .
+
+# Or install normally
+pip install .
+```
+
+Then use the tool from anywhere:
+
+```bash
+specify init <PROJECT_NAME>
+specify check
+```
+
+**Benefits of local installation:**
+
+- Make changes and test immediately
+- Contribute to the project
+- Work offline with local templates
+- Debug and customize behavior
+
+#### Option 4: One-time Usage (No Installation)
+
+Run directly without installing (requires uv):
+
+```bash
+uvx --from git+https://github.com/typesafeme/spec-kit.git specify init <PROJECT_NAME>
+```
 
 ### 2. Establish project principles
 
@@ -177,6 +228,8 @@ The `specify` command supports the following options:
 | `--debug`              | Flag     | Enable detailed debug output for troubleshooting                            |
 | `--github-token`       | Option   | GitHub token for API requests (or set GH_TOKEN/GITHUB_TOKEN env variable)  |
 
+> **Note on Offline Template Support**: `specify init` will automatically use local template zip files if found in the current directory. Templates should follow the naming pattern `spec-kit-template-{agent}-{script}-v{version}.zip` (e.g., `spec-kit-template-claude-sh-v0.0.20.zip`). If multiple versions exist, the latest version is used. If no local template is found, the command falls back to downloading from GitHub.
+
 ### Examples
 
 ```bash
@@ -216,6 +269,11 @@ specify init my-project --ai claude --debug
 
 # Use GitHub token for API requests (helpful for corporate environments)
 specify init my-project --ai claude --github-token ghp_your_token_here
+
+# Use local template for offline development
+# First, place a template zip in your current directory (e.g., spec-kit-template-claude-sh-v0.0.20.zip)
+# Then run init - it will automatically use the local template instead of downloading
+specify init my-project --ai claude --script sh
 
 # Check system requirements
 specify check
@@ -622,7 +680,7 @@ rm gcm-linux_amd64.2.6.1.deb
 
 ## 💬 Support
 
-For support, please open a [GitHub issue](https://github.com/github/spec-kit/issues/new). We welcome bug reports, feature requests, and questions about using Spec-Driven Development.
+For support, please open a [GitHub issue](https://github.com/typesafeme/spec-kit/issues/new). We welcome bug reports, feature requests, and questions about using Spec-Driven Development.
 
 ## 🙏 Acknowledgements
 

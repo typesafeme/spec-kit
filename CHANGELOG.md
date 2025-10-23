@@ -7,6 +7,18 @@ All notable changes to the Specify CLI and templates are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Offline Template Support**: `specify init` now supports local template zip files for offline development
+  - Automatically searches for local templates in the current directory matching pattern `spec-kit-template-{agent}-{script}-v{version}.zip`
+  - Selects the latest version when multiple local templates are available
+  - Falls back to GitHub download if no local template is found
+  - Preserves local template files after extraction (no cleanup)
+  - Enables faster feature initialization and offline development workflows
+  - Example: Place `spec-kit-template-claude-sh-v0.0.20.zip` in your directory and run `specify init --ai claude --script sh` to use it locally
+
 ## [0.0.20] - 2025-10-14
 
 ### Added
