@@ -570,6 +570,128 @@ def get_installation_templates_dir() -> Path:
     templates_dir = package_dir / "spec-kit-templates"
     return templates_dir
 
+def read_local_version(templates_dir: Path = None, verbose: bool = False) -> Optional[str]:
+    """Read version from version.txt in templates directory.
+
+    Args:
+        templates_dir: Path to templates directory (defaults to installation directory)
+        verbose: Whether to print version information
+
+    Returns:
+        Version string (e.g., "1.0.0") or None if not found
+    """
+    if templates_dir is None:
+        templates_dir = get_installation_templates_dir()
+
+    version_file = templates_dir / "version.txt"
+
+    if not version_file.exists():
+        if verbose:
+            console.print(f"[yellow]No version.txt found in:[/yellow] {templates_dir}")
+        return None
+
+    try:
+        version = version_file.read_text().strip()
+        if verbose:
+            console.print(f"[cyan]Local version:[/cyan] {version}")
+        return version
+    except Exception as e:
+        if verbose:
+            console.print(f"[yellow]Error reading version.txt:[/yellow] {e}")
+        return None
+
+def find_all_local_templates(ai_assistant: str, script_type: str, search_dir: Path = None, verbose: bool = False) -> list[Tuple[Path, str]]:
+    """Find all local template zip files matching pattern spec-kit-template-{agent}-{script}-v{version}.zip
+
+    Args:
+        ai_assistant: AI assistant name (e.g., 'claude', 'copilot')
+        script_type: Script type ('sh' or 'ps')
+        search_dir: Directory to search (defaults to installation directory)
+        verbose: Whether to print search information
+
+    Returns:
+        List of tuples (file_path, version_string) sorted by version (descending)
+    """
+    import re
+
+    if search_dir is None:
+        search_dir = get_installation_templates_dir()
+
+    pattern = f"spec-kit-template-{ai_assistant}-{script_type}-v"
+    version_pattern = re.compile(rf"^spec-kit-template-{re.escape(ai_assistant)}-{re.escape(script_type)}-v(\d+\.\d+\.\d+)\.zip$")
+
+    if verbose:
+        console.print(f"[cyan]Searching for templates:[/cyan] {pattern}*.zip in {search_dir}")
+
+    if not search_dir.exists():
+        if verbose:
+            console.print(f"[yellow]Directory does not exist:[/yellow] {search_dir}")
+        return []
+
+    matching_files = []
+
+    for file in search_dir.glob(f"{pattern}*.zip"):
+        match = version_pattern.match(file.name)
+        if match:
+            version_str = match.group(1)
+            try:
+                # Parse semantic version for sorting
+                version_parts = tuple(map(int, version_str.split('.')))
+                matching_files.append((file, version_str, version_parts))
+            except ValueError:
+                continue
+
+    if not matching_files:
+        if verbose:
+            console.print(f"[yellow]No templates found matching pattern:[/yellow] {pattern}*.zip")
+        return []
+
+    # Sort by version (descending) and return without version_parts
+    matching_files.sort(key=lambda x: x[2], reverse=True)
+    result = [(f, v) for f, v, _ in matching_files]
+
+    if verbose:
+        console.print(f"[green]Found {len(result)} template(s):[/green]")
+        for file, version in result:
+            console.print(f"  - {file.name} (v{version})")
+
+    return result
+
+def select_local_template(templates: list[Tuple[Path, str]], prompt_text: str = "Multiple templates found. Select one:") -> Path:
+    """Interactively select a template from multiple options.
+
+    Args:
+        templates: List of tuples (file_path, version_string)
+        prompt_text: Text to show above the options
+
+    Returns:
+        Selected template Path
+    """
+    if not templates:
+        raise ValueError("No templates provided for selection")
+
+    if len(templates) == 1:
+        # Only one template, return it automatically
+        return templates[0][0]
+
+    # Create options dict for selection
+    options = {}
+    for file_path, version in templates:
+        key = f"{file_path.name}"
+        description = f"v{version}"
+        options[key] = description
+
+    # Use interactive selection
+    selected_filename = select_with_arrows(options, prompt_text)
+
+    # Find the matching file
+    for file_path, _ in templates:
+        if file_path.name == selected_filename:
+            return file_path
+
+    # Fallback to first template
+    return templates[0][0]
+
 def find_local_template(ai_assistant: str, script_type: str, search_dir: Path = None, verbose: bool = False) -> Optional[Path]:
     """Find local template zip file matching pattern spec-kit-template-{agent}-{script}-v{version}.zip
 
@@ -747,46 +869,97 @@ def download_template_from_github(ai_assistant: str, download_dir: Path, *, scri
     }
     return zip_path, metadata
 
-def download_and_extract_template(project_path: Path, ai_assistant: str, script_type: str, is_current_dir: bool = False, *, verbose: bool = True, tracker: StepTracker | None = None, client: httpx.Client = None, debug: bool = False, github_token: str = None) -> Path:
+def download_and_extract_template(project_path: Path, ai_assistant: str, script_type: str, is_current_dir: bool = False, *, verbose: bool = True, tracker: StepTracker | None = None, client: httpx.Client = None, debug: bool = False, github_token: str = None, offline: bool = False) -> Path:
     """Download the latest release and extract it to create a new project.
     Returns project_path. Uses tracker if provided (with keys: fetch, download, extract, cleanup)
 
-    First attempts to use local template file from installation directory, then falls back to GitHub download.
+    First attempts to use local template file from installation directory, then falls back to GitHub download
+    unless offline=True, in which case it only uses local templates.
+
+    In offline mode:
+    - Reads version from version.txt in templates directory
+    - Finds all matching local templates
+    - Allows interactive selection if multiple templates exist
     """
-    # Try to find local template first (searches installation directory)
-    local_template = find_local_template(ai_assistant, script_type, verbose=verbose and tracker is None)
-    
-    if local_template:
+    # Try to find local templates first (searches installation directory)
+    templates_dir = get_installation_templates_dir()
+    local_templates = find_all_local_templates(ai_assistant, script_type, templates_dir, verbose=verbose and tracker is None)
+
+    if local_templates:
+        # Local template(s) found
+        if len(local_templates) > 1:
+            # Multiple templates found - let user choose
+            if tracker:
+                tracker.add("fetch", "Check for local templates")
+                tracker.complete("fetch", f"found {len(local_templates)} templates")
+            elif verbose:
+                console.print(f"[green]Found {len(local_templates)} local templates[/green]")
+
+            # Interactive selection
+            local_template = select_local_template(local_templates, "Select a template to use:")
+        else:
+            # Single template found - use it automatically
+            local_template = local_templates[0][0]
+
+            if tracker:
+                tracker.add("fetch", "Check for local template")
+                tracker.complete("fetch", f"found {local_template.name}")
+
+        # Read local version from version.txt if available (for display purposes)
+        local_version = read_local_version(templates_dir, verbose=verbose and tracker is None)
+
         # Use local template
         zip_path = local_template
         if tracker:
-            tracker.add("fetch", "Check for local template")
-            tracker.complete("fetch", f"found {local_template.name}")
             tracker.add("download", "Download template")
             tracker.skip("download", "using local template")
         elif verbose:
             console.print(f"[green]Using local template:[/green] {local_template.name}")
-        
+            if local_version:
+                console.print(f"[cyan]Version from version.txt:[/cyan] {local_version}")
+
         # Extract metadata from filename (e.g., spec-kit-template-claude-sh-v1.2.3.zip)
         import re
         version_match = re.search(r'-v(\d+\.\d+\.\d+)\.zip$', local_template.name)
-        version = version_match.group(1) if version_match else "unknown"
-        
+        version = version_match.group(1) if version_match else (local_version or "unknown")
+
         meta = {
             "filename": local_template.name,
             "size": local_template.stat().st_size,
             "release": f"v{version}",
             "asset_url": f"file://{local_template}",
-            "source": "local"
+            "source": "local",
+            "version_txt": local_version
         }
     else:
+        # Local template not found
+        if offline:
+            # In offline mode, fail immediately without attempting GitHub download
+            if tracker:
+                tracker.add("fetch", "Check for local template")
+                tracker.error("fetch", "not found (offline mode)")
+
+            error_msg = (
+                f"No local template found for {ai_assistant} with script type {script_type}\n"
+                f"Offline mode enabled - GitHub download skipped\n\n"
+                f"To use offline mode, ensure templates are available in:\n"
+                f"{get_installation_templates_dir()}\n\n"
+                f"Expected filename pattern:\n"
+                f"spec-kit-template-{ai_assistant}-{script_type}-v*.zip\n\n"
+                f"To enable online mode:\n"
+                f"  - Remove --offline flag, or\n"
+                f"  - Unset SPECIFY_OFFLINE environment variable"
+            )
+            console.print(f"[red]Error:[/red] {error_msg}")
+            raise typer.Exit(1)
+
         # Fall back to GitHub download
         if tracker:
             tracker.add("fetch", "Check for local template")
             tracker.complete("fetch", "not found, downloading from GitHub")
         elif verbose:
             console.print("[cyan]No local template found, downloading from GitHub...[/cyan]")
-        
+
         if tracker:
             tracker.start("fetch", "contacting GitHub API")
         try:
@@ -996,18 +1169,19 @@ def init(
     skip_tls: bool = typer.Option(False, "--skip-tls", help="Skip SSL/TLS verification (not recommended)"),
     debug: bool = typer.Option(False, "--debug", help="Show verbose diagnostic output for network and extraction failures"),
     github_token: str = typer.Option(None, "--github-token", help="GitHub token to use for API requests (or set GH_TOKEN or GITHUB_TOKEN environment variable)"),
+    offline: bool = typer.Option(None, "--offline", help="Offline mode: only use local templates, skip all GitHub API calls (or set SPECIFY_OFFLINE=1)"),
 ):
     """
     Initialize a new Specify project from the latest template.
-    
+
     This command will:
     1. Check that required tools are installed (git is optional)
     2. Let you choose your AI assistant
-    3. Download the appropriate template from GitHub
+    3. Use local template or download from GitHub (if not --offline)
     4. Extract the template to a new project directory or current directory
     5. Initialize a fresh git repository (if not --no-git and no existing repo)
     6. Optionally set up AI assistant commands
-    
+
     Examples:
         specify init my-project
         specify init my-project --ai claude
@@ -1019,10 +1193,20 @@ def init(
         specify init --here --ai codex
         specify init --here --ai codebuddy
         specify init --here
-        specify init --here --force  # Skip confirmation when current directory not empty
+        specify init --here --force        # Skip confirmation when current directory not empty
+        specify init my-project --offline  # Offline mode: use only local templates
     """
 
     show_banner()
+
+    # Check for offline mode from environment variable if not explicitly set
+    if offline is None:
+        offline = os.getenv("SPECIFY_OFFLINE", "").lower() in ("1", "true", "yes")
+
+    # Show offline mode notice
+    if offline:
+        offline_source = "via SPECIFY_OFFLINE env var" if os.getenv("SPECIFY_OFFLINE") else "via --offline flag"
+        console.print(f"[cyan]Offline mode enabled[/cyan] ({offline_source}) - using only local templates, skipping GitHub API calls\n")
 
     if project_name == ".":
         here = True
@@ -1143,9 +1327,14 @@ def init(
     tracker.complete("ai-select", f"{selected_ai}")
     tracker.add("script-select", "Select script type")
     tracker.complete("script-select", selected_script)
+
+    # Adjust step labels for offline mode
+    fetch_label = "Check for local template" if offline else "Fetch latest release"
+    download_label = "Use local template" if offline else "Download template"
+
     for key, label in [
-        ("fetch", "Fetch latest release"),
-        ("download", "Download template"),
+        ("fetch", fetch_label),
+        ("download", download_label),
         ("extract", "Extract template"),
         ("zip-list", "Archive contents"),
         ("extracted-summary", "Extraction summary"),
@@ -1166,7 +1355,7 @@ def init(
             local_ssl_context = ssl_context if verify else False
             local_client = httpx.Client(verify=local_ssl_context)
 
-            download_and_extract_template(project_path, selected_ai, selected_script, here, verbose=False, tracker=tracker, client=local_client, debug=debug, github_token=github_token)
+            download_and_extract_template(project_path, selected_ai, selected_script, here, verbose=False, tracker=tracker, client=local_client, debug=debug, github_token=github_token, offline=offline)
 
             ensure_executable_scripts(project_path, tracker=tracker)
 

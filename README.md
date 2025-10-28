@@ -227,8 +227,20 @@ The `specify` command supports the following options:
 | `--skip-tls`           | Flag     | Skip SSL/TLS verification (not recommended)                                 |
 | `--debug`              | Flag     | Enable detailed debug output for troubleshooting                            |
 | `--github-token`       | Option   | GitHub token for API requests (or set GH_TOKEN/GITHUB_TOKEN env variable)  |
+| `--offline`            | Flag     | Offline mode: use only local templates, skip all GitHub API calls (or set SPECIFY_OFFLINE=1) |
 
-> **Note on Offline Template Support**: `specify init` will automatically use local template zip files if found in the current directory. Templates should follow the naming pattern `spec-kit-template-{agent}-{script}-v{version}.zip` (e.g., `spec-kit-template-claude-sh-v0.0.20.zip`). If multiple versions exist, the latest version is used. If no local template is found, the command falls back to downloading from GitHub.
+> **Note on Offline Mode**: `specify init` supports true offline operation when using the `--offline` flag or setting `SPECIFY_OFFLINE=1` environment variable. In offline mode:
+>
+> - Version information is read from `spec-kit-templates/version.txt` instead of GitHub API
+> - Templates are searched in the installation directory (`src/specify_cli/spec-kit-templates/`)
+> - When multiple template versions exist, an interactive selection menu appears (use arrow keys to choose)
+> - When only one template is available, it's automatically selected (latest version preferred)
+> - No GitHub API calls are made - completely network-free operation
+> - Templates follow the naming pattern `spec-kit-template-{agent}-{script}-v{version}.zip`
+> - If no local templates are found in offline mode, initialization fails with helpful error message
+> - In online mode (default), local templates are tried first, then GitHub download as fallback
+>
+> For detailed offline mode documentation, see [`OFFLINE_MODE.md`](./OFFLINE_MODE.md).
 
 ### Examples
 
@@ -270,10 +282,28 @@ specify init my-project --ai claude --debug
 # Use GitHub token for API requests (helpful for corporate environments)
 specify init my-project --ai claude --github-token ghp_your_token_here
 
-# Use local template for offline development
-# First, place a template zip in your current directory (e.g., spec-kit-template-claude-sh-v0.0.20.zip)
-# Then run init - it will automatically use the local template instead of downloading
-specify init my-project --ai claude --script sh
+# Offline mode - work without internet (requires local templates in installation directory)
+specify init my-project --ai claude --offline
+
+# Offline mode using environment variable
+export SPECIFY_OFFLINE=1
+specify init my-project --ai claude
+
+# Offline mode will automatically find and use local templates
+# If multiple template versions exist, you'll see an interactive selection menu:
+#   ▶ spec-kit-template-claude-sh-v1.2.0.zip (v1.2.0)
+#     spec-kit-template-claude-sh-v1.1.0.zip (v1.1.0)
+#     spec-kit-template-claude-sh-v1.0.0.zip (v1.0.0)
+# Use arrow keys to select, Enter to confirm
+
+# To add templates for offline use:
+# 1. Place template zip files in: src/specify_cli/spec-kit-templates/
+# 2. Follow naming pattern: spec-kit-template-{agent}-{script}-v{version}.zip
+# 3. Update version.txt with current version
+# Example:
+#   cd src/specify_cli/spec-kit-templates/
+#   cp ~/Downloads/spec-kit-template-claude-sh-v1.2.0.zip .
+#   echo "1.2.0" > version.txt
 
 # Check system requirements
 specify check

@@ -11,13 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Offline Template Support**: `specify init` now supports local template zip files for offline development
-  - Automatically searches for local templates in the current directory matching pattern `spec-kit-template-{agent}-{script}-v{version}.zip`
-  - Selects the latest version when multiple local templates are available
-  - Falls back to GitHub download if no local template is found
-  - Preserves local template files after extraction (no cleanup)
-  - Enables faster feature initialization and offline development workflows
-  - Example: Place `spec-kit-template-claude-sh-v0.0.20.zip` in your directory and run `specify init --ai claude --script sh` to use it locally
+- **Enhanced Offline Mode Support**: `specify init` now supports true offline operation without any GitHub API calls
+  - New `--offline` flag and `SPECIFY_OFFLINE` environment variable to enable offline mode
+  - Reads version from local `version.txt` file in `spec-kit-templates/` directory instead of GitHub API
+  - Automatically searches installation directory (`src/specify_cli/spec-kit-templates/`) for local templates
+  - **Interactive template selection** when multiple versions exist - use arrow keys to choose
+  - Automatically selects latest version when only one template is available
+  - Semantic version sorting (latest first) for multi-template scenarios
+  - Falls back to GitHub download only when not in offline mode and no local templates found
+  - Preserves local template files after extraction (no cleanup, unlike GitHub downloads)
+  - Corporate firewall friendly - no internet required once templates are installed
+  - Enables faster initialization (no network latency) and true offline development workflows
+  - Example usage:
+    - `specify init my-project --ai claude --offline`
+    - `export SPECIFY_OFFLINE=1 && specify init my-project --ai claude`
+    - Place multiple templates in installation directory for version selection
+  - See `OFFLINE_MODE.md` for comprehensive documentation
 
 ## [0.0.20] - 2025-10-14
 
